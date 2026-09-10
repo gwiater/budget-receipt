@@ -55,12 +55,13 @@ const RECEIPT_SCHEMA = {
 
 /**
  * Wywołuje Google Gemini (darmowy model Flash) w celu rozpoznania pozycji
- * paragonu i przypisania im kategorii wydatku. Przyjmuje obraz/PDF paragonu
- * (base64) lub czysty tekst.
+ * paragonu i przypisania im kategorii wydatku. Przyjmuje jeden lub więcej
+ * obrazów/PDF-ów paragonu (base64, np. kilka zdjęć długiego paragonu w
+ * kolejności) i/lub czysty tekst.
  */
-export async function extractReceipt({ imageBase64, mediaType, text }) {
-  if (!imageBase64 && !text) {
-    throw new Error('Podaj obraz paragonu (imageBase64) lub tekst (text).');
+export async function extractReceipt({ images, text }) {
+  if ((!images || images.length === 0) && !text) {
+    throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -71,14 +72,19 @@ export async function extractReceipt({ imageBase64, mediaType, text }) {
   const ai = new GoogleGenAI({ apiKey });
   const parts = [];
 
-  if (imageBase64) {
-    parts.push({ inlineData: { mimeType: mediaType, data: imageBase64 } });
+  for (const image of images || []) {
+    parts.push({ inlineData: { mimeType: image.mediaType, data: image.data } });
   }
+
+  const multiImageHint =
+    images && images.length > 1
+      ? ` Powyższe ${images.length} zdjęcia to fragmenty jednego, długiego paragonu, podane w kolejności — potraktuj je jako jeden ciągły dokument i nie licz pozycji dwa razy, jeśli fragmenty się nakładają.`
+      : '';
 
   parts.push({
     text: text
-      ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.`
-      : 'Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.',
+      ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`
+      : `Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`,
   });
 
   const response = await ai.models.generateContent({

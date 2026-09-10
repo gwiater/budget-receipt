@@ -49,9 +49,13 @@ npm run cli -- paragon.jpg
 npm run cli -- paragon.pdf
 npm run cli -- paragon.txt
 npm run cli -- paragon.jpg --json
+
+# długi paragon rozłożony na kilka zdjęć (w kolejności) — potraktowane jako jeden dokument
+npm run cli -- paragon-1.jpg paragon-2.jpg paragon-3.jpg
 ```
 
-Wsparcie dla formatów: `.jpg`, `.jpeg`, `.png`, `.webp`, `.pdf`, `.txt`.
+Wsparcie dla formatów: `.jpg`, `.jpeg`, `.png`, `.webp`, `.pdf`, `.txt`. Plik
+`.txt` musi być podany samodzielnie (bez łączenia z innymi plikami).
 
 Przykładowy wynik:
 
@@ -93,21 +97,40 @@ Zwraca listę dostępnych kategorii.
 
 ### `POST /api/receipts`
 
-Trzy sposoby przekazania paragonu:
+Długi paragon obsługiwany jest przez **kilka plików w jednym żądaniu** —
+podaj zdjęcia we właściwej kolejności, a model potraktuje je jako jeden
+ciągły dokument (bez podwójnego liczenia pozycji z nakładających się
+fragmentów). Limit: do 10 plików, każdy do 15 MB.
 
-**1. Plik (multipart/form-data)**
+**1. Pliki (multipart/form-data, jedno lub więcej pól `files`)**
 
 ```bash
+# jedno zdjęcie
 curl -X POST localhost:3000/api/receipts \
-  -F "file=@paragon.jpg"
+  -F "files=@paragon.jpg"
+
+# długi paragon — kilka zdjęć w kolejności
+curl -X POST localhost:3000/api/receipts \
+  -F "files=@paragon-1.jpg" \
+  -F "files=@paragon-2.jpg" \
+  -F "files=@paragon-3.jpg"
 ```
 
-**2. Obraz/PDF jako base64 (JSON)**
+**2. Obrazy/PDF-y jako base64 (JSON)**
 
 ```bash
+# jedno zdjęcie
 curl -X POST localhost:3000/api/receipts \
   -H "Content-Type: application/json" \
   -d '{"imageBase64": "<base64>", "mediaType": "image/jpeg"}'
+
+# kilka zdjęć jednego paragonu, w kolejności
+curl -X POST localhost:3000/api/receipts \
+  -H "Content-Type: application/json" \
+  -d '{"images": [
+        {"imageBase64": "<base64-1>", "mediaType": "image/jpeg"},
+        {"imageBase64": "<base64-2>", "mediaType": "image/jpeg"}
+      ]}'
 ```
 
 **3. Czysty tekst (np. z OCR)**
@@ -135,8 +158,8 @@ Odpowiedź:
 }
 ```
 
-Limity: pliki do 15 MB, obsługiwane typy: `image/jpeg`, `image/png`,
-`image/webp`, `application/pdf`.
+Limity: do 10 plików w żądaniu, każdy do 15 MB, obsługiwane typy:
+`image/jpeg`, `image/png`, `image/webp`, `application/pdf`.
 
 ## Docker
 

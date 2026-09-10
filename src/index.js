@@ -14,24 +14,25 @@ const MIME_TYPES = {
 };
 
 function parseArgs(argv) {
-  const args = { json: false, file: null };
+  const args = { json: false, files: [] };
   for (const arg of argv) {
     if (arg === '--json') args.json = true;
-    else if (!args.file) args.file = arg;
+    else args.files.push(arg);
   }
   return args;
 }
 
 function printUsage() {
   console.error(
-    'Użycie: node src/index.js <ścieżka-do-paragonu.jpg|.png|.webp|.pdf|.txt> [--json]',
+    'Użycie: node src/index.js <paragon.jpg|.png|.webp|.pdf|.txt> [kolejne-zdjęcie.jpg ...] [--json]\n' +
+      '  (dla długiego paragonu podaj kilka zdjęć w kolejności — potraktowane jako jeden dokument)',
   );
 }
 
 async function main() {
-  const { file, json } = parseArgs(process.argv.slice(2));
+  const { files, json } = parseArgs(process.argv.slice(2));
 
-  if (!file) {
+  if (files.length === 0) {
     printUsage();
     process.exit(1);
   }
@@ -52,24 +53,32 @@ async function main() {
     process.exit(1);
   }
 
-  if (!fs.existsSync(file)) {
-    console.error(`Plik nie istnieje: ${file}`);
+  for (const file of files) {
+    if (!fs.existsSync(file)) {
+      console.error(`Plik nie istnieje: ${file}`);
+      process.exit(1);
+    }
+  }
+
+  if (files.length > 1 && files.some((f) => path.extname(f).toLowerCase() === '.txt')) {
+    console.error('Plik .txt nie może być łączony z innymi plikami — podaj go samodzielnie.');
     process.exit(1);
   }
 
-  const ext = path.extname(file).toLowerCase();
-  const buffer = fs.readFileSync(file);
-
   let payload;
-  if (ext === '.txt') {
-    payload = { text: buffer.toString('utf-8') };
+  if (files.length === 1 && path.extname(files[0]).toLowerCase() === '.txt') {
+    payload = { text: fs.readFileSync(files[0], 'utf-8') };
   } else {
-    const mediaType = MIME_TYPES[ext];
-    if (!mediaType) {
-      console.error(`Nieobsługiwany format pliku: ${ext}. Wsparcie: jpg, png, webp, pdf, txt.`);
-      process.exit(1);
-    }
-    payload = { imageBase64: buffer.toString('base64'), mediaType };
+    const images = files.map((file) => {
+      const ext = path.extname(file).toLowerCase();
+      const mediaType = MIME_TYPES[ext];
+      if (!mediaType) {
+        console.error(`Nieobsługiwany format pliku: ${ext} (${file}). Wsparcie: jpg, png, webp, pdf, txt.`);
+        process.exit(1);
+      }
+      return { data: fs.readFileSync(file).toString('base64'), mediaType };
+    });
+    payload = { images };
   }
 
   const result = await provider.extractReceipt(payload);

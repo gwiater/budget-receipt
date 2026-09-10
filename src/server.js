@@ -7,10 +7,11 @@ import { CATEGORIES } from './categories.js';
 
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_FILES = 10;
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_UPLOAD_BYTES },
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_FILES },
 });
 
 const app = express();
@@ -24,7 +25,7 @@ app.get('/api/categories', (req, res) => {
   res.json({ categories: CATEGORIES });
 });
 
-app.post('/api/receipts', upload.single('file'), async (req, res) => {
+app.post('/api/receipts', upload.array('files', MAX_FILES), async (req, res) => {
   try {
     const payload = buildPayload(req);
     const provider = getProvider();
@@ -39,14 +40,40 @@ app.post('/api/receipts', upload.single('file'), async (req, res) => {
 });
 
 function buildPayload(req) {
-  if (req.file) {
-    if (!ALLOWED_MEDIA_TYPES.has(req.file.mimetype)) {
-      throw httpError(400, `Nieobsługiwany typ pliku: ${req.file.mimetype}.`);
-    }
-    return { imageBase64: req.file.buffer.toString('base64'), mediaType: req.file.mimetype };
+  if (req.files && req.files.length > 0) {
+    const images = req.files.map((file) => {
+      if (!ALLOWED_MEDIA_TYPES.has(file.mimetype)) {
+        throw httpError(
+          400,
+          `Nieobsługiwany typ pliku: ${file.mimetype} (${file.originalname}).`,
+        );
+      }
+      return { data: file.buffer.toString('base64'), mediaType: file.mimetype };
+    });
+    return { images };
   }
 
   const body = req.body || {};
+
+  // Kilka zdjęć jednego długiego paragonu: [{ imageBase64, mediaType }, ...]
+  if (Array.isArray(body.images) && body.images.length > 0) {
+    if (body.images.length > MAX_FILES) {
+      throw httpError(400, `Zbyt wiele plików — maksymalnie ${MAX_FILES}.`);
+    }
+    const images = body.images.map((image, i) => {
+      if (!image.mediaType || !ALLOWED_MEDIA_TYPES.has(image.mediaType)) {
+        throw httpError(
+          400,
+          `images[${i}]: podaj poprawny "mediaType" (image/jpeg, image/png, image/webp, application/pdf).`,
+        );
+      }
+      if (!image.imageBase64) {
+        throw httpError(400, `images[${i}]: brak pola "imageBase64".`);
+      }
+      return { data: image.imageBase64, mediaType: image.mediaType };
+    });
+    return { images };
+  }
 
   if (body.imageBase64) {
     if (!body.mediaType || !ALLOWED_MEDIA_TYPES.has(body.mediaType)) {
@@ -55,7 +82,7 @@ function buildPayload(req) {
         'Podaj poprawny "mediaType" (image/jpeg, image/png, image/webp, application/pdf).',
       );
     }
-    return { imageBase64: body.imageBase64, mediaType: body.mediaType };
+    return { images: [{ data: body.imageBase64, mediaType: body.mediaType }] };
   }
 
   if (body.text) {
@@ -64,7 +91,8 @@ function buildPayload(req) {
 
   throw httpError(
     400,
-    'Wymagany plik w polu multipart "file", albo pole "text", albo "imageBase64" + "mediaType" w JSON.',
+    'Wymagany co najmniej jeden plik w polu multipart "files", albo pole "text", albo ' +
+      '"images": [{imageBase64, mediaType}, ...] / "imageBase64" + "mediaType" w JSON.',
   );
 }
 
