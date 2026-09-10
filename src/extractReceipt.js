@@ -1,0 +1,100 @@
+import Anthropic from '@anthropic-ai/sdk';
+
+export const CATEGORIES = [
+  'Żywność i napoje',
+  'Alkohol',
+  'Chemia i higiena',
+  'Zdrowie i apteka',
+  'Dom i AGD',
+  'Odzież i obuwie',
+  'Elektronika',
+  'Rozrywka',
+  'Transport',
+  'Gastronomia',
+  'Inne',
+];
+
+const EXTRACT_TOOL = {
+  name: 'extract_receipt',
+  description:
+    'Zwraca listę pozycji odczytanych z paragonu wraz z kategorią wydatku przypisaną do każdej z nich.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      store: {
+        type: 'string',
+        description: 'Nazwa sklepu/punktu sprzedaży, jeśli jest widoczna na paragonie.',
+      },
+      date: {
+        type: 'string',
+        description: 'Data paragonu w formacie YYYY-MM-DD, jeśli jest widoczna.',
+      },
+      items: {
+        type: 'array',
+        description: 'Pojedyncze pozycje z paragonu.',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Nazwa produktu/pozycji.' },
+            quantity: { type: 'number', description: 'Ilość, jeśli podana.' },
+            unitPrice: { type: 'number', description: 'Cena jednostkowa, jeśli podana.' },
+            totalPrice: { type: 'number', description: 'Wartość pozycji (ilość * cena).' },
+            category: {
+              type: 'string',
+              enum: CATEGORIES,
+              description: 'Kategoria wydatku najlepiej odpowiadająca tej pozycji.',
+            },
+          },
+          required: ['name', 'totalPrice', 'category'],
+        },
+      },
+      total: {
+        type: 'number',
+        description: 'Suma całego paragonu wydrukowana na dole, jeśli widoczna.',
+      },
+    },
+    required: ['items'],
+  },
+};
+
+/**
+ * Wywołuje LLM (Anthropic) w celu rozpoznania pozycji paragonu i przypisania
+ * im kategorii wydatku. Przyjmuje obraz/PDF paragonu (base64) lub czysty tekst.
+ */
+export async function extractReceipt({ imageBase64, mediaType, text }) {
+  if (!imageBase64 && !text) {
+    throw new Error('Podaj obraz paragonu (imageBase64) lub tekst (text).');
+  }
+
+  const client = new Anthropic();
+  const content = [];
+
+  if (imageBase64) {
+    content.push({
+      type: mediaType === 'application/pdf' ? 'document' : 'image',
+      source: { type: 'base64', media_type: mediaType, data: imageBase64 },
+    });
+  }
+
+  content.push({
+    type: 'text',
+    text: text
+      ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.`
+      : 'Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.',
+  });
+
+  const response = await client.messages.create({
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+    max_tokens: 4096,
+    tools: [EXTRACT_TOOL],
+    tool_choice: { type: 'tool', name: 'extract_receipt' },
+    messages: [{ role: 'user', content }],
+  });
+
+  const toolUse = response.content.find((block) => block.type === 'tool_use');
+  if (!toolUse) {
+    throw new Error('Model nie zwrócił danych paragonu w oczekiwanym formacie.');
+  }
+
+  return toolUse.input;
+}

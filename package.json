@@ -1,0 +1,20 @@
+{
+  "name": "budget-receipt",
+  "version": "1.0.0",
+  "description": "Rozpoznawanie kategorii wydatków z paragonu przy użyciu LLM oraz sumowanie pozycji per kategoria",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "budget-receipt": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "dotenv": "^16.4.5"
+  }
+}
