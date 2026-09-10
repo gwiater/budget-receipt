@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import { extractReceipt } from './extractReceipt.js';
+import { getProvider } from './providers/index.js';
 import { summarizeByCategory } from './summarize.js';
 
 const MIME_TYPES = {
@@ -36,9 +36,18 @@ async function main() {
     process.exit(1);
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const provider = getProvider();
+
+  if (provider.name === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
     console.error(
       'Brak ANTHROPIC_API_KEY w środowisku. Skopiuj .env.example do .env i wpisz swój klucz API.',
+    );
+    process.exit(1);
+  }
+
+  if (provider.name === 'gemini' && !process.env.GEMINI_API_KEY) {
+    console.error(
+      'Brak GEMINI_API_KEY w środowisku. Skopiuj .env.example do .env i wpisz swój klucz API.',
     );
     process.exit(1);
   }
@@ -63,7 +72,7 @@ async function main() {
     payload = { imageBase64: buffer.toString('base64'), mediaType };
   }
 
-  const result = await extractReceipt(payload);
+  const result = await provider.extractReceipt(payload);
   const summary = summarizeByCategory(result.items || []);
 
   if (json) {

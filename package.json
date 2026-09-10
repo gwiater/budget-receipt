@@ -1,20 +1,24 @@
 {
   "name": "budget-receipt",
   "version": "1.0.0",
-  "description": "Rozpoznawanie kategorii wydatków z paragonu przy użyciu LLM oraz sumowanie pozycji per kategoria",
+  "description": "Rozpoznawanie kategorii wydatków z paragonu przy użyciu LLM (Anthropic Claude lub Google Gemini Flash) oraz sumowanie pozycji per kategoria, dostępne jako CLI i jako API HTTP",
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/server.js",
   "bin": {
     "budget-receipt": "./src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/server.js",
+    "cli": "node src/index.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
-    "dotenv": "^16.4.5"
+    "@google/genai": "^2.21.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "multer": "^2.3.0"
   }
 }

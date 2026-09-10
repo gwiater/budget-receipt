@@ -1,18 +1,23 @@
 # budget-receipt
 
 Aplikacja w Node.js, która rozpoznaje pozycje na paragonie i przypisuje im
-kategorię wydatku za pomocą LLM (Claude), a następnie sumuje wartości pozycji
-per kategoria.
+kategorię wydatku za pomocą LLM, a następnie sumuje wartości pozycji per
+kategoria. Dostępna jako CLI oraz jako API HTTP, z możliwością uruchomienia
+w Dockerze.
 
-## Jak to działa
+## Wybór dostawcy LLM
 
-1. Paragon (zdjęcie/PDF lub tekst z OCR) jest wysyłany do modelu Claude.
-2. Model, korzystając z wymuszonego wywołania narzędzia (`tool_choice`),
-   zwraca ustrukturyzowaną listę pozycji: nazwa, ilość, cena, kategoria.
-3. Aplikacja sumuje wartości pozycji per kategoria i wypisuje raport.
+Dostawca wybierany jest zmienną środowiskową `LLM_PROVIDER`:
 
-Kategorie są ograniczone do stałej listy (`src/extractReceipt.js`), dzięki
-czemu podsumowania są konsystentne między różnymi paragonami:
+- `anthropic` (domyślny) — Claude, wymaga `ANTHROPIC_API_KEY`.
+- `gemini` — Google Gemini Flash (darmowy tier), wymaga `GEMINI_API_KEY`.
+
+Model dla każdego dostawcy można nadpisać przez `ANTHROPIC_MODEL` /
+`GEMINI_MODEL` (domyślnie `claude-opus-5` / `gemini-2.5-flash`).
+
+Kategorie są ograniczone do stałej listy (`src/categories.js`), dzięki czemu
+podsumowania są konsystentne między różnymi paragonami i niezależne od
+wybranego dostawcy:
 
 - Żywność i napoje
 - Alkohol
@@ -31,16 +36,19 @@ czemu podsumowania są konsystentne między różnymi paragonami:
 ```bash
 npm install
 cp .env.example .env
-# wpisz swój klucz w .env: ANTHROPIC_API_KEY=sk-ant-...
+# wybierz dostawcę i wpisz odpowiedni klucz w .env
 ```
 
-## Użycie
+- Klucz Anthropic: https://console.anthropic.com/
+- Klucz Gemini (darmowy): https://aistudio.google.com/apikey
+
+## CLI
 
 ```bash
-node src/index.js paragon.jpg
-node src/index.js paragon.pdf
-node src/index.js paragon.txt
-node src/index.js paragon.jpg --json
+npm run cli -- paragon.jpg
+npm run cli -- paragon.pdf
+npm run cli -- paragon.txt
+npm run cli -- paragon.jpg --json
 ```
 
 Wsparcie dla formatów: `.jpg`, `.jpeg`, `.png`, `.webp`, `.pdf`, `.txt`.
@@ -65,9 +73,95 @@ Podsumowanie per kategoria:
   SUMA:                       42.70 zł
 ```
 
+## API HTTP
+
+```bash
+npm start
+# serwer nasłuchuje na porcie z PORT (domyślnie 3000)
+```
+
+### `GET /health`
+
+```bash
+curl localhost:3000/health
+# {"status":"ok","provider":"anthropic"}
+```
+
+### `GET /api/categories`
+
+Zwraca listę dostępnych kategorii.
+
+### `POST /api/receipts`
+
+Trzy sposoby przekazania paragonu:
+
+**1. Plik (multipart/form-data)**
+
+```bash
+curl -X POST localhost:3000/api/receipts \
+  -F "file=@paragon.jpg"
+```
+
+**2. Obraz/PDF jako base64 (JSON)**
+
+```bash
+curl -X POST localhost:3000/api/receipts \
+  -H "Content-Type: application/json" \
+  -d '{"imageBase64": "<base64>", "mediaType": "image/jpeg"}'
+```
+
+**3. Czysty tekst (np. z OCR)**
+
+```bash
+curl -X POST localhost:3000/api/receipts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Biedronka\nChleb pszenny 4.99\nMleko 3.29"}'
+```
+
+Odpowiedź:
+
+```json
+{
+  "provider": "anthropic",
+  "store": "Biedronka",
+  "date": "2026-09-08",
+  "items": [
+    { "name": "Chleb pszenny", "totalPrice": 4.99, "category": "Żywność i napoje" }
+  ],
+  "total": 4.99,
+  "summary": [
+    { "category": "Żywność i napoje", "total": 4.99 }
+  ]
+}
+```
+
+Limity: pliki do 15 MB, obsługiwane typy: `image/jpeg`, `image/png`,
+`image/webp`, `application/pdf`.
+
+## Docker
+
+```bash
+docker build -t budget-receipt .
+docker run -p 3000:3000 \
+  -e LLM_PROVIDER=gemini \
+  -e GEMINI_API_KEY=twoj-klucz \
+  budget-receipt
+```
+
+Albo przez docker-compose (odczytuje zmienne z `.env` w katalogu projektu):
+
+```bash
+docker compose up --build
+```
+
 ## Struktura projektu
 
-- `src/extractReceipt.js` – wywołanie LLM i definicja narzędzia (schema) do
-  ekstrakcji pozycji paragonu.
+- `src/categories.js` – lista kategorii wydatków.
+- `src/providers/anthropicProvider.js` – ekstrakcja pozycji przez Claude
+  (wymuszone wywołanie narzędzia).
+- `src/providers/geminiProvider.js` – ekstrakcja pozycji przez Gemini Flash
+  (structured output przez `responseSchema`).
+- `src/providers/index.js` – wybór dostawcy na podstawie `LLM_PROVIDER`.
 - `src/summarize.js` – sumowanie pozycji per kategoria.
 - `src/index.js` – interfejs CLI.
+- `src/server.js` – API HTTP (Express).

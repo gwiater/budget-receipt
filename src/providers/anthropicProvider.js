@@ -1,18 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-
-export const CATEGORIES = [
-  'Żywność i napoje',
-  'Alkohol',
-  'Chemia i higiena',
-  'Zdrowie i apteka',
-  'Dom i AGD',
-  'Odzież i obuwie',
-  'Elektronika',
-  'Rozrywka',
-  'Transport',
-  'Gastronomia',
-  'Inne',
-];
+import { CATEGORIES } from '../categories.js';
 
 const EXTRACT_TOOL = {
   name: 'extract_receipt',
@@ -58,7 +45,7 @@ const EXTRACT_TOOL = {
 };
 
 /**
- * Wywołuje LLM (Anthropic) w celu rozpoznania pozycji paragonu i przypisania
+ * Wywołuje Claude (Anthropic) w celu rozpoznania pozycji paragonu i przypisania
  * im kategorii wydatku. Przyjmuje obraz/PDF paragonu (base64) lub czysty tekst.
  */
 export async function extractReceipt({ imageBase64, mediaType, text }) {
@@ -84,7 +71,7 @@ export async function extractReceipt({ imageBase64, mediaType, text }) {
   });
 
   const response = await client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+    model: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
     max_tokens: 4096,
     tools: [EXTRACT_TOOL],
     tool_choice: { type: 'tool', name: 'extract_receipt' },
