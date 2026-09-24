@@ -59,7 +59,7 @@ const RECEIPT_SCHEMA = {
  * obrazów/PDF-ów paragonu (base64, np. kilka zdjęć długiego paragonu w
  * kolejności) i/lub czysty tekst.
  */
-export async function extractReceipt({ images, text }) {
+export async function extractReceipt({ images, text, note }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
@@ -82,9 +82,10 @@ export async function extractReceipt({ images, text }) {
       : '';
 
   parts.push({
-    text: text
+    text: (text
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`
-      : `Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`,
+      : `Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`)
+      + noteHint(note),
   });
 
   const response = await ai.models.generateContent({
@@ -106,4 +107,15 @@ export async function extractReceipt({ images, text }) {
   } catch (err) {
     throw new Error(`Nie udało się sparsować odpowiedzi Gemini jako JSON: ${err.message}`);
   }
+}
+
+/**
+ * Opcjonalna uwaga użytkownika dołączana do promptu (np. „to zakupy na urodziny”,
+ * „płatność kartą firmową”) — wskazówka przy odczycie i kategoryzacji.
+ */
+function noteHint(note) {
+  const trimmed = typeof note === 'string' ? note.trim() : '';
+  return trimmed
+    ? `\n\nDodatkowa informacja od użytkownika (uwzględnij ją przy odczycie i przypisywaniu kategorii): ${trimmed}`
+    : '';
 }

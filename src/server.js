@@ -8,6 +8,7 @@ import { CATEGORIES } from './categories.js';
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_FILES = 10;
+const MAX_NOTE_LENGTH = 1000;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -27,7 +28,7 @@ app.get('/api/categories', (req, res) => {
 
 app.post('/api/receipts', upload.array('files', MAX_FILES), async (req, res) => {
   try {
-    const payload = buildPayload(req);
+    const payload = { ...buildPayload(req), note: readNote(req) };
     const provider = getProvider();
     const result = await provider.extractReceipt(payload);
     const summary = summarizeByCategory(result.items || []);
@@ -94,6 +95,15 @@ function buildPayload(req) {
     'Wymagany co najmniej jeden plik w polu multipart "files", albo pole "text", albo ' +
       '"images": [{imageBase64, mediaType}, ...] / "imageBase64" + "mediaType" w JSON.',
   );
+}
+
+// Opcjonalna uwaga do promptu: pole "note" w multipart albo w JSON.
+function readNote(req) {
+  const note = (req.body && typeof req.body.note === 'string') ? req.body.note.trim() : '';
+  if (note.length > MAX_NOTE_LENGTH) {
+    throw httpError(400, `Pole "note" może mieć najwyżej ${MAX_NOTE_LENGTH} znaków.`);
+  }
+  return note || undefined;
 }
 
 function httpError(statusCode, message) {

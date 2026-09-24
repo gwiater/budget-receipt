@@ -133,6 +133,16 @@ curl -X POST localhost:3000/api/receipts \
       ]}'
 ```
 
+**Opcjonalna uwaga do promptu** — pole `note` (w multipart albo w JSON, do 1000
+znaków) jest dołączane do promptu jako dodatkowa informacja od użytkownika, np.
+„zakupy na urodziny Zuzi”, „wszystko to karma dla kota”:
+
+```bash
+curl -X POST localhost:3000/api/receipts \
+  -F "files=@paragon.jpg" \
+  -F "note=zakupy na urodziny Zuzi"
+```
+
 **3. Czysty tekst (np. z OCR)**
 
 ```bash
