@@ -12,8 +12,22 @@ Dostawca wybierany jest zmienną środowiskową `LLM_PROVIDER`:
 - `anthropic` (domyślny) — Claude, wymaga `ANTHROPIC_API_KEY`.
 - `gemini` — Google Gemini Flash (darmowy tier), wymaga `GEMINI_API_KEY`.
 
+- `ollama` — lokalny model przez [Ollamę](https://ollama.com), **bez klucza API i bez
+  opłat** (domyślnie `qwen2.5vl:3b`, ~3,2 GB). Adres `OLLAMA_URL` (domyślnie
+  `http://ollama:11434`). Działa też na samym CPU, ale wolniej (kilkadziesiąt sekund na
+  zdjęcie); nie czyta PDF-ów.
+
 Model dla każdego dostawcy można nadpisać przez `ANTHROPIC_MODEL` /
-`GEMINI_MODEL` (domyślnie `claude-opus-5` / `gemini-2.5-flash`).
+`GEMINI_MODEL` / `OLLAMA_MODEL` (domyślnie `claude-opus-5` / `gemini-2.5-flash` /
+`qwen2.5vl:3b`).
+
+Ollama w Dockerze (model pobiera się raz):
+
+```bash
+docker run -d --name ollama -v ollama:/root/.ollama -p 11434:11434 ollama/ollama
+docker exec ollama ollama pull qwen2.5vl:3b
+LLM_PROVIDER=ollama OLLAMA_URL=http://localhost:11434 npm start
+```
 
 Kategorie są ograniczone do stałej listy (`src/categories.js`), dzięki czemu
 podsumowania są konsystentne między różnymi paragonami i niezależne od
