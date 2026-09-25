@@ -18,7 +18,7 @@ Dostawca wybierany jest zmienną środowiskową `LLM_PROVIDER`:
   zdjęcie); nie czyta PDF-ów.
 
 Model dla każdego dostawcy można nadpisać przez `ANTHROPIC_MODEL` /
-`GEMINI_MODEL` / `OLLAMA_MODEL` (domyślnie `claude-opus-5` / `gemini-2.5-flash` /
+`GEMINI_MODEL` / `OLLAMA_MODEL` (domyślnie `claude-opus-5` / `gemini-3.5-flash` /
 `qwen2.5vl:3b`).
 
 Ollama w Dockerze (model pobiera się raz):

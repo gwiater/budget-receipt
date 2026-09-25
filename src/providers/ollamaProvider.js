@@ -78,12 +78,15 @@ export async function extractReceipt({ images, text, note }) {
   ].join(' ');
 
   const baseUrl = (process.env.OLLAMA_URL || 'http://ollama:11434').replace(/\/$/, '');
+  // stream: true — na CPU długi paragon liczy się ponad 5 minut, a fetch z Node przerywa
+  // żądanie, gdy przez 5 minut nie przyjdą nagłówki odpowiedzi. Przy strumieniu nagłówki
+  // i kolejne fragmenty przychodzą na bieżąco.
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: process.env.OLLAMA_MODEL || 'qwen2.5vl:3b',
-      stream: false,
+      stream: true,
       format: RECEIPT_SCHEMA,
       options: { temperature: 0 },
       messages: [
@@ -96,14 +99,31 @@ export async function extractReceipt({ images, text, note }) {
     }),
   });
 
-  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
     throw new Error(`Ollama: ${body.error || `błąd ${response.status}`}`);
+  }
+
+  // Odpowiedź to NDJSON: {"message":{"content":"..."},"done":false} ... {"done":true}.
+  let content = '';
+  let buffer = '';
+  const decoder = new TextDecoder();
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let newline;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      const part = JSON.parse(line);
+      if (part.error) throw new Error(`Ollama: ${part.error}`);
+      content += part.message?.content || '';
+    }
   }
 
   let result;
   try {
-    result = JSON.parse(body.message?.content || '');
+    result = JSON.parse(content);
   } catch {
     throw new Error('Model nie zwrócił danych paragonu w oczekiwanym formacie.');
   }

@@ -89,7 +89,7 @@ export async function extractReceipt({ images, text, note }) {
   });
 
   const response = await ai.models.generateContent({
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
     contents: [{ role: 'user', parts }],
     config: {
       responseMimeType: 'application/json',
