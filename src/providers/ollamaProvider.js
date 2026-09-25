@@ -1,4 +1,4 @@
-import { CATEGORIES } from '../categories.js';
+import { CATEGORIES, categoryPrompt } from '../categories.js';
 
 /**
  * Lokalny model przez Ollamę (https://ollama.com) — bez klucza API i bez opłat, np.
@@ -32,24 +32,6 @@ const RECEIPT_SCHEMA = {
   required: ['items'],
 };
 
-/**
- * Mały lokalny model myli kategorie bez podpowiedzi (np. chleb jako „Zdrowie i apteka”) —
- * krótkie opisy, co należy do której kategorii.
- */
-const CATEGORY_HINTS = {
-  'Żywność i napoje': 'pieczywo, nabiał, mleko, jajka, mięso, wędliny, owoce, warzywa, słodycze, kawa, herbata, napoje bezalkoholowe',
-  Alkohol: 'piwo, wino, wódka i inne alkohole',
-  'Chemia i higiena': 'środki czystości, płyny do naczyń, proszki, papier toaletowy, kosmetyki, pasta do zębów, szampony',
-  'Zdrowie i apteka': 'leki, suplementy, opatrunki, artykuły z apteki',
-  'Dom i AGD': 'artykuły domowe, naczynia, drobne AGD, żarówki, dekoracje, karma i akcesoria dla zwierząt',
-  'Odzież i obuwie': 'ubrania, buty, bielizna',
-  Elektronika: 'elektronika, baterie, kable, akcesoria do telefonów',
-  Rozrywka: 'książki, gry, zabawki, bilety',
-  Transport: 'paliwo, bilety komunikacji, parkingi, myjnia',
-  Gastronomia: 'jedzenie na miejscu lub na wynos w restauracji, kawiarni, barze',
-  Inne: 'wszystko, co nie pasuje do pozostałych',
-};
-
 export async function extractReceipt({ images, text, note }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
@@ -69,8 +51,8 @@ export async function extractReceipt({ images, text, note }) {
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nOdczytaj z niego wszystkie pozycje.`
       : 'Odczytaj wszystkie pozycje z załączonego zdjęcia paragonu (polski paragon fiskalny).',
     multiImageHint,
-    '\nDla każdej pozycji podaj nazwę (bez ilości i ceny), wartość pozycji (totalPrice, liczba w zł, po rabatach) i jedną kategorię z listy:',
-    CATEGORIES.map((c) => `\n- ${c}${CATEGORY_HINTS[c] ? ` (${CATEGORY_HINTS[c]})` : ''}`).join(''),
+    '\nDla każdej pozycji podaj nazwę (bez ilości i ceny), wartość pozycji (totalPrice, liczba w zł, po rabatach) i kategorię.',
+    `\n${categoryPrompt()}\n`,
     '\nNazwa sklepu (store) to nazwa sieci/sklepu widoczna na paragonie (np. Biedronka, Lidl), nie nazwa firmy-właściciela.',
     'Podaj też nazwę sklepu (store), datę paragonu w formacie YYYY-MM-DD (date) i sumę do zapłaty (total), jeśli są widoczne.',
     'Nie wymyślaj pozycji, których nie ma na paragonie. Odpowiedz wyłącznie JSON-em zgodnym ze schematem.',

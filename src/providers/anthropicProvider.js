@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { CATEGORIES } from '../categories.js';
+import { CATEGORIES, categoryPrompt } from '../categories.js';
 
 const EXTRACT_TOOL = {
   name: 'extract_receipt',
@@ -74,6 +74,7 @@ export async function extractReceipt({ images, text, note }) {
     text: (text
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`
       : `Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`)
+      + `\n\n${categoryPrompt()}`
       + noteHint(note),
   });
 

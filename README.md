@@ -21,6 +21,11 @@ Model dla każdego dostawcy można nadpisać przez `ANTHROPIC_MODEL` /
 `GEMINI_MODEL` / `OLLAMA_MODEL` (domyślnie `claude-opus-5` / `gemini-3.5-flash` /
 `qwen2.5vl:3b`).
 
+Gemini ma zapasowe modele: gdy model odpowiada 503 (przeciążony) albo 429 (limit),
+serwis od razu próbuje kolejnego z `GEMINI_FALLBACK_MODELS` (po przecinku, domyślnie
+`gemini-3.5-flash,gemini-3.1-flash-lite`), a gdy wszystkie są przeciążone — jeszcze raz
+po 5 sekundach. Użyty model widać w logach kontenera.
+
 Ollama w Dockerze (model pobiera się raz):
 
 ```bash
@@ -29,21 +34,20 @@ docker exec ollama ollama pull qwen2.5vl:3b
 LLM_PROVIDER=ollama OLLAMA_URL=http://localhost:11434 npm start
 ```
 
-Kategorie są ograniczone do stałej listy (`src/categories.js`), dzięki czemu
-podsumowania są konsystentne między różnymi paragonami i niezależne od
-wybranego dostawcy:
+Kategorie to kategorie wydatków z aplikacji budżetowej
+([gwiater/budget](https://github.com/gwiater/budget)), z tymi samymi nazwami
+(`src/categories.js`), więc budżet przypisuje odczytane pozycje do swoich kategorii
+po nazwie. Każda kategoria ma przykłady z komentarzy wydatków z bieżącego miesiąca
+rozliczeniowego (albo krótki opis, jeśli przykładów nie było). Lista z przykładami
+trafia do promptu każdego dostawcy (`categoryPrompt()`), żeby model kategoryzował
+zakupy tak jak domownicy:
 
-- Żywność i napoje
-- Alkohol
-- Chemia i higiena
-- Zdrowie i apteka
-- Dom i AGD
-- Odzież i obuwie
-- Elektronika
-- Rozrywka
-- Transport
-- Gastronomia
-- Inne
+Spożywcze, Dziecko, Rozrywka, Prezenty, Prezenty dla nas, Użytkowe, Kosmetyki,
+Dom - utrzymanie, środki czystości itp., Wyposażenie, ogród, RTV i AGD, Leczenie,
+Alkohole, Odzież, Samochód, Sport / hobby, Zwierzaki, Komunikacja, Rachunki, Usługi,
+Kredyt - budowa domu, Inne.
+
+Po zmianie kategorii w budżecie zaktualizuj `src/categories.js` — nazwy muszą się zgadzać.
 
 ## Instalacja
 
@@ -80,12 +84,12 @@ Data:  2026-09-08
 ==================================================
 
 Pozycje:
-  [Żywność i napoje] Chleb pszenny — 4.99 zł
+  [Spożywcze] Chleb pszenny — 4.99 zł
   [Chemia i higiena] Płyn do naczyń — 8.50 zł
   ...
 
 Podsumowanie per kategoria:
-  Żywność i napoje            34.20 zł
+  Spożywcze                   34.20 zł
   Chemia i higiena             8.50 zł
 --------------------------------------------------
   SUMA:                       42.70 zł
@@ -173,11 +177,11 @@ Odpowiedź:
   "store": "Biedronka",
   "date": "2026-09-08",
   "items": [
-    { "name": "Chleb pszenny", "totalPrice": 4.99, "category": "Żywność i napoje" }
+    { "name": "Chleb pszenny", "totalPrice": 4.99, "category": "Spożywcze" }
   ],
   "total": 4.99,
   "summary": [
-    { "category": "Żywność i napoje", "total": 4.99 }
+    { "category": "Spożywcze", "total": 4.99 }
   ]
 }
 ```
