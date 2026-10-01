@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORIES, categoryPrompt } from '../categories.js';
+import { measure } from '../timing.js';
 
 const EXTRACT_TOOL = {
   name: 'extract_receipt',
@@ -49,7 +50,7 @@ const EXTRACT_TOOL = {
  * im kategorii wydatku. Przyjmuje jeden lub więcej obrazów/PDF-ów paragonu
  * (base64, np. kilka zdjęć długiego paragonu w kolejności) i/lub czysty tekst.
  */
-export async function extractReceipt({ images, text, note }) {
+export async function extractReceipt({ images, text, note, timer }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
@@ -78,13 +79,13 @@ export async function extractReceipt({ images, text, note }) {
       + noteHint(note),
   });
 
-  const response = await client.messages.create({
+  const response = await measure(timer, `anthropic ${process.env.ANTHROPIC_MODEL || 'claude-opus-5'}`, () => client.messages.create({
     model: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
     max_tokens: 4096,
     tools: [EXTRACT_TOOL],
     tool_choice: { type: 'tool', name: 'extract_receipt' },
     messages: [{ role: 'user', content }],
-  });
+  }));
 
   const toolUse = response.content.find((block) => block.type === 'tool_use');
   if (!toolUse) {

@@ -4,6 +4,7 @@ import multer from 'multer';
 import { getProvider } from './providers/index.js';
 import { summarizeByCategory } from './summarize.js';
 import { CATEGORIES } from './categories.js';
+import { createTimer, formatTimings } from './timing.js';
 
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
@@ -26,17 +27,32 @@ app.get('/api/categories', (req, res) => {
   res.json({ categories: CATEGORIES });
 });
 
-app.post('/api/receipts', upload.array('files', MAX_FILES), async (req, res) => {
+// Timer startuje przed multerem, żeby zmierzyć też odbiór plików od budżetu.
+const startTimer = (req, res, next) => {
+  req.timer = createTimer();
+  req.uploadStartedAt = performance.now();
+  next();
+};
+
+app.post('/api/receipts', startTimer, upload.array('files', MAX_FILES), async (req, res) => {
+  const timer = req.timer;
+  timer.add('odbiór plików', performance.now() - req.uploadStartedAt, {
+    files: req.files?.length ?? 0,
+    kB: Math.round((req.files || []).reduce((sum, f) => sum + f.size, 0) / 1024),
+  });
   try {
-    const payload = { ...buildPayload(req), note: readNote(req) };
+    const payload = { ...buildPayload(req), note: readNote(req), timer };
     const provider = getProvider();
+    console.log(`Paragon: ${payload.images?.length ?? 0} plik(ów), uwaga: ${payload.note ? `„${payload.note}”` : 'brak'}`);
     const result = await provider.extractReceipt(payload);
     const summary = summarizeByCategory(result.items || []);
+    console.log(formatTimings(timer));
 
-    res.json({ provider: provider.name, ...result, summary });
+    res.json({ provider: provider.name, ...result, summary, timings: timer.toJSON() });
   } catch (err) {
     console.error(err);
-    res.status(err.statusCode || 500).json({ error: err.message });
+    console.log(`${formatTimings(timer)} — BŁĄD`);
+    res.status(err.statusCode || 500).json({ error: err.message, timings: timer.toJSON() });
   }
 });
 
