@@ -18,7 +18,8 @@ const RESPONSE_FORMAT =
  * po krótkiej przerwie.
  */
 const DEFAULT_MODEL = 'gemini-3.5-flash';
-const DEFAULT_FALLBACK_MODELS = 'gemini-3.5-flash,gemini-3.1-flash-lite';
+// gemini-3.7-flash na końcu — prawie zawsze odpowiada 503 i tylko opóźniał odczyt (~4 s na próbę).
+const DEFAULT_FALLBACK_MODELS = 'gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.7-flash';
 const ROUNDS = 2;
 const ROUND_DELAY_MS = 5000;
 
@@ -28,7 +29,7 @@ const ROUND_DELAY_MS = 5000;
  * obrazów/PDF-ów paragonu (base64, np. kilka zdjęć długiego paragonu w
  * kolejności) i/lub czysty tekst.
  */
-export async function extractReceipt({ images, text, note }) {
+export async function extractReceipt({ images, text, note, timer }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
@@ -47,7 +48,7 @@ export async function extractReceipt({ images, text, note }) {
 
   parts.push({ text: buildPrompt({ images, text, note }) });
 
-  const response = await withFallback((model) => ai.models.generateContent({
+  const response = await withFallback(timer, (model) => ai.models.generateContent({
     model,
     contents: [{ role: 'user', parts }],
     config: {
@@ -57,6 +58,16 @@ export async function extractReceipt({ images, text, note }) {
       thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING_LEVEL || 'low' },
     },
   }));
+
+  // Tokeny „myślenia” (thoughts) najbardziej wydłużają odczyt — widać je w logu.
+  const usage = response.usageMetadata;
+  if (usage && timer) {
+    timer.steps[timer.steps.length - 1].tokens = {
+      prompt: usage.promptTokenCount,
+      output: usage.candidatesTokenCount,
+      thoughts: usage.thoughtsTokenCount ?? 0,
+    };
+  }
 
   const text_ = response.text;
   if (!text_) {
@@ -128,17 +139,23 @@ function isOverloaded(err) {
   return [429, 503].includes(err?.status) || /"code":\s*(429|503)/.test(message);
 }
 
-/** Wywołuje kolejne modele, dopóki któryś nie odpowie (patrz DEFAULT_FALLBACK_MODELS). */
-async function withFallback(call) {
+/**
+ * Wywołuje kolejne modele, dopóki któryś nie odpowie (patrz DEFAULT_FALLBACK_MODELS).
+ * Każda próba (także nieudana) trafia do `timer` jako krok „gemini <model>”.
+ */
+async function withFallback(timer, call) {
   const models = modelChain();
   let lastError;
   for (let round = 1; round <= ROUNDS; round++) {
     for (const model of models) {
+      const startedAt = performance.now();
       try {
         const response = await call(model);
+        timer?.add(`gemini ${model}`, performance.now() - startedAt, { status: 'ok' });
         console.log(`Gemini: odczyt modelem ${model}`);
         return response;
       } catch (err) {
+        timer?.add(`gemini ${model}`, performance.now() - startedAt, { status: err?.status ?? 'błąd' });
         if (!isOverloaded(err)) {
           throw err;
         }
@@ -147,6 +164,7 @@ async function withFallback(call) {
       }
     }
     if (round < ROUNDS) {
+      timer?.add('przerwa przed 2. rundą', ROUND_DELAY_MS);
       await new Promise((resolve) => setTimeout(resolve, ROUND_DELAY_MS));
     }
   }

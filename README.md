@@ -23,8 +23,9 @@ Model dla każdego dostawcy można nadpisać przez `ANTHROPIC_MODEL` /
 
 Gemini ma zapasowe modele: gdy model odpowiada 503 (przeciążony) albo 429 (limit),
 serwis od razu próbuje kolejnego z `GEMINI_FALLBACK_MODELS` (po przecinku, domyślnie
-`gemini-3.5-flash,gemini-3.1-flash-lite`), a gdy wszystkie są przeciążone — jeszcze raz
-po 5 sekundach. Użyty model widać w logach kontenera.
+`gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.7-flash` — 3.7 na końcu, bo zwykle jest
+przeciążony), a gdy wszystkie są przeciążone — jeszcze raz po 5 sekundach. Użyty model i czas
+każdej próby widać w logach kontenera (`odczyt … ms: …`) oraz w polu `timings` odpowiedzi.
 
 Ollama w Dockerze (model pobiera się raz):
 

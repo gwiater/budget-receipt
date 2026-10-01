@@ -32,7 +32,7 @@ const RECEIPT_SCHEMA = {
   required: ['items'],
 };
 
-export async function extractReceipt({ images, text, note }) {
+export async function extractReceipt({ images, text, note, timer }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
@@ -63,6 +63,7 @@ export async function extractReceipt({ images, text, note }) {
   // stream: true — na CPU długi paragon liczy się ponad 5 minut, a fetch z Node przerywa
   // żądanie, gdy przez 5 minut nie przyjdą nagłówki odpowiedzi. Przy strumieniu nagłówki
   // i kolejne fragmenty przychodzą na bieżąco.
+  const startedAt = performance.now();
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -102,6 +103,8 @@ export async function extractReceipt({ images, text, note }) {
       content += part.message?.content || '';
     }
   }
+
+  timer?.add(`ollama ${process.env.OLLAMA_MODEL || 'qwen2.5vl:3b'}`, performance.now() - startedAt);
 
   let result;
   try {
