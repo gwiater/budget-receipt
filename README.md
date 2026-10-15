@@ -48,7 +48,10 @@ Dom - utrzymanie, środki czystości itp., Wyposażenie, ogród, RTV i AGD, Lecz
 Alkohole, Odzież, Samochód, Sport / hobby, Zwierzaki, Komunikacja, Rachunki, Usługi,
 Kredyt - budowa domu, Inne.
 
-Po zmianie kategorii w budżecie zaktualizuj `src/categories.js` — nazwy muszą się zgadzać.
+Budżet wysyła przy każdym odczycie swoją aktualną listę kategorii w polu `categories`
+(patrz niżej) — nowa albo przemianowana kategoria w budżecie działa od razu, bez zmian
+tutaj. Lista z `src/categories.js` służy wtedy tylko jako źródło przykładów/opisów dla
+kategorii o tych samych nazwach i jako zapas, gdy pola `categories` nie ma.
 
 ## Instalacja
 
@@ -160,6 +163,19 @@ znaków) jest dołączane do promptu jako dodatkowa informacja od użytkownika, 
 curl -X POST localhost:3000/api/receipts \
   -F "files=@paragon.jpg" \
   -F "note=zakupy na urodziny Zuzi"
+```
+
+**Opcjonalna lista kategorii** — pole `categories` (w multipart jako JSON-owy tekst, w JSON
+jako tablica): `[{"name": "Spożywcze", "examples": ["Masło Extra 83%", "chleb"]}, ...]`
+(do 100 kategorii, do 25 przykładów). Nazwy i kolejność są brane z tej listy; przykłady z
+`src/categories.js` dla tej samej nazwy zostają, przysłane dochodzą po nich. Model wybiera
+tylko spośród przysłanych nazw (spoza listy → „Inne”, a gdy jej nie ma — `null`). Bez pola
+— lista z `src/categories.js`.
+
+```bash
+curl -X POST localhost:3000/api/receipts \
+  -F "files=@paragon.jpg" \
+  -F 'categories=[{"name":"Spożywcze","examples":["Masło Extra 83%"]},{"name":"Inne"}]'
 ```
 
 **3. Czysty tekst (np. z OCR)**
