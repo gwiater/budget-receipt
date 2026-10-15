@@ -3,7 +3,7 @@ import express from 'express';
 import multer from 'multer';
 import { getProvider } from './providers/index.js';
 import { summarizeByCategory } from './summarize.js';
-import { CATEGORIES } from './categories.js';
+import { CATEGORIES, resolveCategories } from './categories.js';
 import { createTimer, formatTimings } from './timing.js';
 
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
@@ -41,9 +41,12 @@ app.post('/api/receipts', startTimer, upload.array('files', MAX_FILES), async (r
     kB: Math.round((req.files || []).reduce((sum, f) => sum + f.size, 0) / 1024),
   });
   try {
-    const payload = { ...buildPayload(req), note: readNote(req), timer };
+    const fromBudget = req.body?.categories !== undefined && req.body?.categories !== '';
+    const payload = { ...buildPayload(req), note: readNote(req), categories: resolveCategories(req.body?.categories), timer };
     const provider = getProvider();
-    console.log(`Paragon: ${payload.images?.length ?? 0} plik(ów), uwaga: ${payload.note ? `„${payload.note}”` : 'brak'}`);
+    const examples = payload.categories.reduce((sum, c) => sum + (c.examples?.length ?? 0), 0);
+    console.log(`Paragon: ${payload.images?.length ?? 0} plik(ów), uwaga: ${payload.note ? `„${payload.note}”` : 'brak'}, `
+      + `kategorie: ${fromBudget ? 'z budżetu' : 'wbudowane'} (${payload.categories.length}, przykładów ${examples})`);
     const result = await provider.extractReceipt(payload);
     const summary = summarizeByCategory(result.items || []);
     console.log(formatTimings(timer));

@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { CATEGORIES, categoryPrompt } from '../categories.js';
+import { CATEGORY_DEFINITIONS, categoryPrompt, normalizeCategory } from '../categories.js';
 
 /**
  * Format odpowiedzi opisany w prompcie. Bez wymuszonego schematu (responseSchema) —
@@ -29,7 +29,7 @@ const ROUND_DELAY_MS = 5000;
  * obrazów/PDF-ów paragonu (base64, np. kilka zdjęć długiego paragonu w
  * kolejności) i/lub czysty tekst.
  */
-export async function extractReceipt({ images, text, note, timer }) {
+export async function extractReceipt({ images, text, note, categories = CATEGORY_DEFINITIONS, timer }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
@@ -46,7 +46,7 @@ export async function extractReceipt({ images, text, note, timer }) {
     parts.push({ inlineData: { mimeType: image.mediaType, data: image.data } });
   }
 
-  parts.push({ text: buildPrompt({ images, text, note }) });
+  parts.push({ text: buildPrompt({ images, text, note, categories }) });
 
   const response = await withFallback(timer, (model) => ai.models.generateContent({
     model,
@@ -81,10 +81,10 @@ export async function extractReceipt({ images, text, note, timer }) {
     throw new Error(`Nie udało się sparsować odpowiedzi Gemini jako JSON: ${err.message}`);
   }
 
-  return normalizeResult(result);
+  return normalizeResult(result, categories);
 }
 
-export function buildPrompt({ images, text, note }) {
+export function buildPrompt({ images, text, note, categories = CATEGORY_DEFINITIONS }) {
   const multiImageHint =
     images && images.length > 1
       ? `\nPowyższe ${images.length} zdjęcia to fragmenty jednego, długiego paragonu, podane w kolejności — potraktuj je jako jeden ciągły dokument i nie licz pozycji dwa razy, jeśli fragmenty się nakładają.`
@@ -104,14 +104,14 @@ export function buildPrompt({ images, text, note }) {
       '- total: suma do zapłaty z dołu paragonu.',
       '- Pomiń pozycje stornowane (anulowane). Nie wymyślaj pozycji, których nie ma na paragonie.',
     ].join('\n'),
-    categoryPrompt(),
+    categoryPrompt(categories),
     noteHint(note),
     `Odpowiedz wyłącznie JSON-em w formacie:\n${RESPONSE_FORMAT}`,
   ].filter(Boolean).join('\n\n');
 }
 
-/** Kategorie spoza listy → „Inne”, pozycje bez kwoty pomijane. */
-function normalizeResult(result) {
+/** Kategorie spoza listy → „Inne” (normalizeCategory), pozycje bez kwoty pomijane. */
+function normalizeResult(result, categories) {
   const items = Array.isArray(result?.items) ? result.items : [];
 
   return {
@@ -119,7 +119,7 @@ function normalizeResult(result) {
     date: typeof result?.date === 'string' ? result.date : null,
     items: items
       .filter((item) => item && typeof item.name === 'string' && typeof item.totalPrice === 'number')
-      .map((item) => ({ ...item, category: CATEGORIES.includes(item.category) ? item.category : 'Inne' })),
+      .map((item) => ({ ...item, category: normalizeCategory(item.category, categories) })),
     total: typeof result?.total === 'number' ? result.total : null,
   };
 }

@@ -1,4 +1,4 @@
-import { CATEGORIES, categoryPrompt } from '../categories.js';
+import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt, normalizeCategory } from '../categories.js';
 
 /**
  * Lokalny model przez Ollamę (https://ollama.com) — bez klucza API i bez opłat, np.
@@ -8,7 +8,8 @@ import { CATEGORIES, categoryPrompt } from '../categories.js';
  *
  * Zmienne: OLLAMA_URL (domyślnie http://ollama:11434), OLLAMA_MODEL (domyślnie qwen2.5vl:3b).
  */
-const RECEIPT_SCHEMA = {
+/** Schemat odpowiedzi z listą kategorii (enum) — lista może przyjść z budżetu. */
+const receiptSchema = (categories) => ({
   type: 'object',
   properties: {
     store: { type: ['string', 'null'] },
@@ -22,7 +23,7 @@ const RECEIPT_SCHEMA = {
           quantity: { type: ['number', 'null'] },
           unitPrice: { type: ['number', 'null'] },
           totalPrice: { type: 'number' },
-          category: { type: 'string', enum: CATEGORIES },
+          category: { type: 'string', enum: categoryNames(categories) },
         },
         required: ['name', 'totalPrice', 'category'],
       },
@@ -30,9 +31,9 @@ const RECEIPT_SCHEMA = {
     total: { type: ['number', 'null'] },
   },
   required: ['items'],
-};
+});
 
-export async function extractReceipt({ images, text, note, timer }) {
+export async function extractReceipt({ images, text, note, categories = CATEGORY_DEFINITIONS, timer }) {
   if ((!images || images.length === 0) && !text) {
     throw new Error('Podaj co najmniej jeden obraz paragonu (images) lub tekst (text).');
   }
@@ -52,7 +53,7 @@ export async function extractReceipt({ images, text, note, timer }) {
       : 'Odczytaj wszystkie pozycje z załączonego zdjęcia paragonu (polski paragon fiskalny).',
     multiImageHint,
     '\nDla każdej pozycji podaj nazwę (bez ilości i ceny), wartość pozycji (totalPrice, liczba w zł, po rabatach) i kategorię.',
-    `\n${categoryPrompt()}\n`,
+    `\n${categoryPrompt(categories)}\n`,
     '\nNazwa sklepu (store) to nazwa sieci/sklepu widoczna na paragonie (np. Biedronka, Lidl), nie nazwa firmy-właściciela.',
     'Podaj też nazwę sklepu (store), datę paragonu w formacie YYYY-MM-DD (date) i sumę do zapłaty (total), jeśli są widoczne.',
     'Nie wymyślaj pozycji, których nie ma na paragonie. Odpowiedz wyłącznie JSON-em zgodnym ze schematem.',
@@ -70,7 +71,7 @@ export async function extractReceipt({ images, text, note, timer }) {
     body: JSON.stringify({
       model: process.env.OLLAMA_MODEL || 'qwen2.5vl:3b',
       stream: true,
-      format: RECEIPT_SCHEMA,
+      format: receiptSchema(categories),
       options: { temperature: 0 },
       messages: [
         {
@@ -116,7 +117,7 @@ export async function extractReceipt({ images, text, note, timer }) {
   // Mały model czasem zwraca kategorię spoza listy — takie pozycje trafiają do "Inne".
   result.items = (result.items || [])
     .filter((item) => item && typeof item.totalPrice === 'number')
-    .map((item) => ({ ...item, category: CATEGORIES.includes(item.category) ? item.category : 'Inne' }));
+    .map((item) => ({ ...item, category: normalizeCategory(item.category, categories) }));
 
   return result;
 }
