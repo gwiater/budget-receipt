@@ -98,7 +98,7 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
 }
 
 /** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — wymuszone narzędzie z id kategorii. */
-export async function extractExpenses({ text, categories, timer }) {
+export async function extractExpenses({ text, categories, tags = [], timer }) {
   const model = process.env.ANTHROPIC_MODEL || 'claude-opus-5';
   const tool = {
     name: 'add_expenses',
@@ -114,6 +114,8 @@ export async function extractExpenses({ text, categories, timer }) {
               categoryId: { type: ['integer', 'null'], enum: [...categories.map((c) => c.id), null] },
               amount: { type: 'number' },
               description: { type: 'string' },
+              tagIds: { type: 'array', items: { type: 'integer' } },
+              newTags: { type: 'array', items: { type: 'string' } },
             },
             required: ['categoryId', 'amount', 'description'],
           },
@@ -128,7 +130,7 @@ export async function extractExpenses({ text, categories, timer }) {
     max_tokens: 2048,
     tools: [tool],
     tool_choice: { type: 'tool', name: tool.name },
-    messages: [{ role: 'user', content: buildExpensesPrompt({ text, categories }) }],
+    messages: [{ role: 'user', content: buildExpensesPrompt({ text, categories, tags }) }],
   }));
 
   const toolUse = response.content.find((block) => block.type === 'tool_use');
@@ -136,7 +138,7 @@ export async function extractExpenses({ text, categories, timer }) {
     throw new Error('Model nie zwrócił wydatków w oczekiwanym formacie.');
   }
 
-  return normalizeExpenses(toolUse.input, categories);
+  return normalizeExpenses(toolUse.input, categories, tags);
 }
 
 /**

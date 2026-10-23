@@ -5,7 +5,7 @@ import { getProvider } from './providers/index.js';
 import { summarizeByCategory } from './summarize.js';
 import { CATEGORIES, resolveCategories } from './categories.js';
 import { createTimer, formatTimings } from './timing.js';
-import { readExpenseText, resolveExpenseCategories } from './expenses.js';
+import { readExpenseText, resolveExpenseCategories, resolveExpenseTags } from './expenses.js';
 
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
@@ -61,15 +61,17 @@ app.post('/api/receipts', startTimer, upload.array('files', MAX_FILES), async (r
 });
 
 // Wydatki z tekstu wpisanego/podyktowanego w budżecie (src/expenses.js):
-// JSON {text, categories: [{id, name, examples?}]} → {items: [{categoryId, amount, description}]}.
+// JSON {text, categories: [{id, name, examples?}], tags?: [{id, name}]}
+// → {items: [{categoryId, amount, description, tagIds, newTags}]}.
 app.post('/api/expenses/text', async (req, res) => {
   const timer = createTimer();
   try {
     const text = readExpenseText(req.body?.text);
     const categories = resolveExpenseCategories(req.body?.categories);
+    const tags = resolveExpenseTags(req.body?.tags);
     const provider = getProvider();
-    console.log(`Wydatki z tekstu: ${text.length} znaków, kategorii ${categories.length}`);
-    const result = await provider.extractExpenses({ text, categories, timer });
+    console.log(`Wydatki z tekstu: ${text.length} znaków, kategorii ${categories.length}, etykiet ${tags.length}`);
+    const result = await provider.extractExpenses({ text, categories, tags, timer });
     console.log(`${formatTimings(timer)} — wydatków ${result.items.length}`);
 
     res.json({ provider: provider.name, ...result, timings: timer.toJSON() });

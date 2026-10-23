@@ -212,6 +212,9 @@ Wydatki z tekstu wpisanego albo podyktowanego w budżecie (strona „Wpisz wydat
 `text` (do 2000 znaków) i `categories` — kategorie budżetu **z id**
 (`[{"id": 1, "name": "Spożywcze", "examples": ["..."]}]`, do 200). Model zwraca każdy wydatek
 osobno: `categoryId` (id z listy albo `null`), `amount` (zł) i krótki opis `description`.
+Opcjonalnie `tags` — etykiety budżetu (`[{"id": 1, "name": "dziecko"}]`): gdy użytkownik poda
+etykietę („30 zł na zwierzaki etykieta dziecko”), pozycja ma `tagIds` (id z listy) i `newTags`
+(nazwy spoza listy, małymi literami). Etykieta to coś innego niż kategoria.
 
 ```bash
 curl -X POST localhost:3000/api/expenses/text \

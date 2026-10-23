@@ -89,7 +89,7 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
  * Wydatki z tekstu wpisanego/podyktowanego w budżecie (POST /api/expenses/text, patrz
  * src/expenses.js) — te same modele i zapasowe modele co przy paragonie.
  */
-export async function extractExpenses({ text, categories, timer }) {
+export async function extractExpenses({ text, categories, tags = [], timer }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('Brak GEMINI_API_KEY w środowisku.');
@@ -98,7 +98,7 @@ export async function extractExpenses({ text, categories, timer }) {
   const ai = new GoogleGenAI({ apiKey });
   const response = await withFallback(timer, (model) => ai.models.generateContent({
     model,
-    contents: [{ role: 'user', parts: [{ text: buildExpensesPrompt({ text, categories }) }] }],
+    contents: [{ role: 'user', parts: [{ text: buildExpensesPrompt({ text, categories, tags }) }] }],
     config: {
       responseMimeType: 'application/json',
       thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING_LEVEL || 'low' },
@@ -109,7 +109,7 @@ export async function extractExpenses({ text, categories, timer }) {
     throw new Error('Model Gemini nie zwrócił żadnej odpowiedzi.');
   }
   try {
-    return normalizeExpenses(JSON.parse(response.text), categories);
+    return normalizeExpenses(JSON.parse(response.text), categories, tags);
   } catch (err) {
     throw new Error(`Nie udało się sparsować odpowiedzi Gemini jako JSON: ${err.message}`);
   }

@@ -124,7 +124,7 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
 }
 
 /** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — krótki prompt, bez strumienia. */
-export async function extractExpenses({ text, categories, timer }) {
+export async function extractExpenses({ text, categories, tags = [], timer }) {
   const model = process.env.OLLAMA_MODEL || 'qwen2.5vl:3b';
   const baseUrl = (process.env.OLLAMA_URL || 'http://ollama:11434').replace(/\/$/, '');
   const startedAt = performance.now();
@@ -146,6 +146,8 @@ export async function extractExpenses({ text, categories, timer }) {
                 categoryId: { type: ['integer', 'null'] },
                 amount: { type: 'number' },
                 description: { type: 'string' },
+                tagIds: { type: 'array', items: { type: 'integer' } },
+                newTags: { type: 'array', items: { type: 'string' } },
               },
               required: ['categoryId', 'amount', 'description'],
             },
@@ -153,7 +155,7 @@ export async function extractExpenses({ text, categories, timer }) {
         },
         required: ['items'],
       },
-      messages: [{ role: 'user', content: buildExpensesPrompt({ text, categories }) }],
+      messages: [{ role: 'user', content: buildExpensesPrompt({ text, categories, tags }) }],
     }),
   });
   timer?.add(`ollama ${model}`, performance.now() - startedAt);
@@ -163,7 +165,7 @@ export async function extractExpenses({ text, categories, timer }) {
     throw new Error(`Ollama: ${body.error || `błąd ${response.status}`}`);
   }
   try {
-    return normalizeExpenses(JSON.parse(body.message?.content || ''), categories);
+    return normalizeExpenses(JSON.parse(body.message?.content || ''), categories, tags);
   } catch {
     throw new Error('Model nie zwrócił wydatków w oczekiwanym formacie.');
   }
