@@ -147,7 +147,6 @@ export async function extractExpenses({ text, categories, tags = [], timer }) {
                 amount: { type: 'number' },
                 description: { type: 'string' },
                 tagIds: { type: 'array', items: { type: 'integer' } },
-                newTags: { type: 'array', items: { type: 'string' } },
               },
               required: ['categoryId', 'amount', 'description'],
             },

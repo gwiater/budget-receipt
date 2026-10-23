@@ -62,7 +62,7 @@ app.post('/api/receipts', startTimer, upload.array('files', MAX_FILES), async (r
 
 // Wydatki z tekstu wpisanego/podyktowanego w budżecie (src/expenses.js):
 // JSON {text, categories: [{id, name, examples?}], tags?: [{id, name}]}
-// → {items: [{categoryId, amount, description, tagIds, newTags}]}.
+// → {items: [{categoryId, amount, description, tagIds}]}.
 app.post('/api/expenses/text', async (req, res) => {
   const timer = createTimer();
   try {
