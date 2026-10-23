@@ -115,13 +115,16 @@ export function buildExpensesPrompt({ text, categories, tags = [] }) {
     [
       'Wypisz każdy wydatek osobno. Zasady:',
       '- amount: kwota w zł jako liczba (np. „35,45 zł” → 35.45, „20 złotych” → 20, „dwadzieścia pięć złotych pięćdziesiąt groszy” → 25.5, „15 zł 30 gr” → 15.3).',
-      '- categoryId: id jednej kategorii z listy poniżej — tej, którą wskazał użytkownik, a gdy jej nie nazwał, najlepiej pasującej do opisu. Gdy nic nie pasuje, null.',
-      '- description: krótki opis wydatku po polsku z wypowiedzi użytkownika (np. „basen”, „zakupy w Lidlu”), bez kwoty i bez nazwy kategorii; gdy poza kategorią nic nie podano — pusty tekst.',
+      '- Typowa wypowiedź: „<kwota> na <kategoria> [etykieta <etykieta>] [z komentarzem / opisem / za <opis>]”. Kategoria stoi po „na”, etykieta po słowie „etykieta”, opis po „z komentarzem”, „z opisem”, „komentarz”, „opis” albo „za”.',
+      '- categoryId: id jednej kategorii z listy poniżej — tej, którą użytkownik nazwał po „na” (także w innej odmianie, np. „komunikację” → Komunikacja, „usługi” → Usługi), a gdy jej nie nazwał, najlepiej pasującej do opisu. Gdy nic nie pasuje, null. Nazwa podana po słowie „etykieta” nigdy nie jest kategorią (np. „na usługi etykieta dziecko” → kategoria Usługi, etykieta dziecko).',
+      '- description: to, co użytkownik podał jako komentarz/opis (po „z komentarzem”, „z opisem”, „komentarz”, „opis”, „za”), przepisane krótko i bez słów „komentarz”, „opis”. Np. „z komentarzem jazda na maksa” → „jazda na maksa”. Nigdy nie wpisuj tu nazwy kategorii ani etykiety, kwoty ani samego słowa „komentarz”; gdy poza kategorią i etykietą nic nie podano — pusty tekst.',
       '- tagIds: etykiety tylko wtedy, gdy użytkownik wprost je poda (np. „etykieta dziecko”, „z etykietą wakacje”, „otaguj paliwo”). '
         + 'Etykieta to coś innego niż kategoria — „na dziecko” to kategoria, „etykieta dziecko” to etykieta. '
         + 'Etykieta z listy poniżej → jej id w tagIds (dopasuj też odmianę, np. „etykietą dziecka” → dziecko); etykiety spoza listy pomiń (nie zgaduj podobnej). '
         + 'Etykieta dotyczy wydatku, przy którym została podana; gdy użytkownik powie, że dotyczy wszystkich — dodaj ją do każdego. Bez etykiet — puste tablice.',
-      '- Nie wymyślaj wydatków, których nie ma w tekście. Pomiń słowa typu „dodaj”, „wpisz” i samą frazę z etykietą w opisie.',
+      '- Nie wymyślaj wydatków, których nie ma w tekście. Pomiń słowa typu „dodaj”, „wpisz”, „wprowadź” i samą frazę z etykietą w opisie.',
+      '- Przykład: „Wprowadź 20 zł na usługi etykieta dziecko z komentarzem test i 30 zł na komunikację z komentarzem jazda na maksa” → '
+        + '[{kategoria Usługi, 20, opis „test”, etykieta dziecko}, {kategoria Komunikacja, 30, opis „jazda na maksa”, bez etykiet}].',
     ].join('\n'),
     [
       'Kategorie (w nawiasach przykłady wcześniejszych wydatków w danej kategorii):',
