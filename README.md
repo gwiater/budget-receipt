@@ -18,7 +18,7 @@ Dostawca wybierany jest zmienną środowiskową `LLM_PROVIDER`:
   zdjęcie); nie czyta PDF-ów.
 
 Model dla każdego dostawcy można nadpisać przez `ANTHROPIC_MODEL` /
-`GEMINI_MODEL` / `OLLAMA_MODEL` (domyślnie `claude-opus-5` / `gemini-3.5-flash` /
+`GEMINI_MODEL` / `OLLAMA_MODEL` (domyślnie `claude-haiku-5-5` / `gemini-3.5-flash` /
 `qwen2.5vl:3b`).
 
 Gemini ma zapasowe modele: gdy model odpowiada 503 (przeciążony) albo 429 (limit),

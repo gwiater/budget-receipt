@@ -81,8 +81,8 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
       + noteHint(note),
   });
 
-  const response = await measure(timer, `anthropic ${process.env.ANTHROPIC_MODEL || 'claude-opus-5'}`, () => client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
+  const response = await measure(timer, `anthropic ${process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5'}`, () => client.messages.create({
+    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
     max_tokens: 4096,
     tools: [extractTool(categories)],
     tool_choice: { type: 'tool', name: 'extract_receipt' },
@@ -99,7 +99,7 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
 
 /** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — wymuszone narzędzie z id kategorii. */
 export async function extractExpenses({ text, categories, tags = [], timer }) {
-  const model = process.env.ANTHROPIC_MODEL || 'claude-opus-5';
+  const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
   const tool = {
     name: 'add_expenses',
     description: 'Zwraca wydatki wymienione przez użytkownika: kategoria (id), kwota w zł i krótki opis.',
