@@ -23,6 +23,9 @@ const DEFAULT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_FALLBACK_MODELS = 'gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.7-flash';
 const ROUNDS = 2;
 const ROUND_DELAY_MS = 5000;
+// Przy przeciążeniu Gemini potrafi trzymać połączenie 20–100 s, zanim odpowie 503. Krótki tekst
+// nie potrzebuje tyle — po tym czasie próbujemy następnego modelu (patrz withFallback).
+const TEXT_ATTEMPT_TIMEOUT_MS = 10000;
 
 /**
  * Wywołuje Google Gemini (darmowy model Flash) w celu rozpoznania pozycji
@@ -96,14 +99,15 @@ export async function extractExpenses({ text, categories, tags = [], timer }) {
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const response = await withFallback(timer, (model) => ai.models.generateContent({
+  const response = await withFallback(timer, (model, signal) => ai.models.generateContent({
     model,
     contents: [{ role: 'user', parts: [{ text: buildExpensesPrompt({ text, categories, tags }) }] }],
     config: {
+      abortSignal: signal,
       responseMimeType: 'application/json',
       thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING_LEVEL || 'low' },
     },
-  }));
+  }), TEXT_ATTEMPT_TIMEOUT_MS);
 
   if (!response.text) {
     throw new Error('Model Gemini nie zwrócił żadnej odpowiedzi.');
@@ -167,6 +171,7 @@ function modelChain() {
 
 function isOverloaded(err) {
   const message = String(err?.message);
+  if (err?.name === 'AbortError' || err?.name === 'TimeoutError') return true;
   return [429, 503].includes(err?.status) || /"code":\s*(429|503)/.test(message);
 }
 
@@ -174,23 +179,24 @@ function isOverloaded(err) {
  * Wywołuje kolejne modele, dopóki któryś nie odpowie (patrz DEFAULT_FALLBACK_MODELS).
  * Każda próba (także nieudana) trafia do `timer` jako krok „gemini <model>”.
  */
-async function withFallback(timer, call) {
+async function withFallback(timer, call, attemptTimeoutMs) {
   const models = modelChain();
   let lastError;
   for (let round = 1; round <= ROUNDS; round++) {
     for (const model of models) {
       const startedAt = performance.now();
       try {
-        const response = await call(model);
+        const signal = attemptTimeoutMs ? AbortSignal.timeout(attemptTimeoutMs) : undefined;
+        const response = await call(model, signal);
         timer?.add(`gemini ${model}`, performance.now() - startedAt, { status: 'ok' });
         console.log(`Gemini: odczyt modelem ${model}`);
         return response;
       } catch (err) {
-        timer?.add(`gemini ${model}`, performance.now() - startedAt, { status: err?.status ?? 'błąd' });
+        timer?.add(`gemini ${model}`, performance.now() - startedAt, { status: err?.status ?? err?.name ?? 'błąd' });
         if (!isOverloaded(err)) {
           throw err;
         }
-        console.warn(`Gemini: ${model} przeciążony (${err?.status ?? 'błąd'}), próbuję następnego modelu`);
+        console.warn(`Gemini: ${model} przeciążony (${err?.status ?? err?.name ?? 'błąd'}), próbuję następnego modelu`);
         lastError = err;
       }
     }
