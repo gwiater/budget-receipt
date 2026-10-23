@@ -206,6 +206,31 @@ Odpowiedź:
 Limity: do 10 plików w żądaniu, każdy do 15 MB, obsługiwane typy:
 `image/jpeg`, `image/png`, `image/webp`, `application/pdf`.
 
+### `POST /api/expenses/text`
+
+Wydatki z tekstu wpisanego albo podyktowanego w budżecie (strona „Wpisz wydatki”). JSON:
+`text` (do 2000 znaków) i `categories` — kategorie budżetu **z id**
+(`[{"id": 1, "name": "Spożywcze", "examples": ["..."]}]`, do 200). Model zwraca każdy wydatek
+osobno: `categoryId` (id z listy albo `null`), `amount` (zł) i krótki opis `description`.
+
+```bash
+curl -X POST localhost:3000/api/expenses/text \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Dodaj 35,45 zł na spożywcze, 20 zł na dziecko na basen",
+       "categories": [{"id": 1, "name": "Spożywcze"}, {"id": 39, "name": "Dziecko"}]}'
+```
+
+```json
+{
+  "provider": "gemini",
+  "items": [
+    { "categoryId": 1, "amount": 35.45, "description": "" },
+    { "categoryId": 39, "amount": 20, "description": "basen" }
+  ],
+  "timings": { "totalMs": 1188, "steps": [] }
+}
+```
+
 ## Docker
 
 ```bash
@@ -225,6 +250,7 @@ docker compose up --build
 ## Struktura projektu
 
 - `src/categories.js` – lista kategorii wydatków.
+- `src/expenses.js` – wydatki z tekstu (`POST /api/expenses/text`): prompt i walidacja.
 - `src/providers/anthropicProvider.js` – ekstrakcja pozycji przez Claude
   (wymuszone wywołanie narzędzia).
 - `src/providers/geminiProvider.js` – ekstrakcja pozycji przez Gemini Flash

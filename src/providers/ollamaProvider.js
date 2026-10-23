@@ -1,4 +1,5 @@
 import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt, normalizeCategory } from '../categories.js';
+import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
 
 /**
  * Lokalny model przez Ollamę (https://ollama.com) — bez klucza API i bez opłat, np.
@@ -120,4 +121,50 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
     .map((item) => ({ ...item, category: normalizeCategory(item.category, categories) }));
 
   return result;
+}
+
+/** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — krótki prompt, bez strumienia. */
+export async function extractExpenses({ text, categories, timer }) {
+  const model = process.env.OLLAMA_MODEL || 'qwen2.5vl:3b';
+  const baseUrl = (process.env.OLLAMA_URL || 'http://ollama:11434').replace(/\/$/, '');
+  const startedAt = performance.now();
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      options: { temperature: 0 },
+      format: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                categoryId: { type: ['integer', 'null'] },
+                amount: { type: 'number' },
+                description: { type: 'string' },
+              },
+              required: ['categoryId', 'amount', 'description'],
+            },
+          },
+        },
+        required: ['items'],
+      },
+      messages: [{ role: 'user', content: buildExpensesPrompt({ text, categories }) }],
+    }),
+  });
+  timer?.add(`ollama ${model}`, performance.now() - startedAt);
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Ollama: ${body.error || `błąd ${response.status}`}`);
+  }
+  try {
+    return normalizeExpenses(JSON.parse(body.message?.content || ''), categories);
+  } catch {
+    throw new Error('Model nie zwrócił wydatków w oczekiwanym formacie.');
+  }
 }

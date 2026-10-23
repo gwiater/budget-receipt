@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { CATEGORY_DEFINITIONS, categoryPrompt, normalizeCategory } from '../categories.js';
+import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
 
 /**
  * Format odpowiedzi opisany w prompcie. Bez wymuszonego schematu (responseSchema) —
@@ -82,6 +83,36 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
   }
 
   return normalizeResult(result, categories);
+}
+
+/**
+ * Wydatki z tekstu wpisanego/podyktowanego w budżecie (POST /api/expenses/text, patrz
+ * src/expenses.js) — te same modele i zapasowe modele co przy paragonie.
+ */
+export async function extractExpenses({ text, categories, timer }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Brak GEMINI_API_KEY w środowisku.');
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await withFallback(timer, (model) => ai.models.generateContent({
+    model,
+    contents: [{ role: 'user', parts: [{ text: buildExpensesPrompt({ text, categories }) }] }],
+    config: {
+      responseMimeType: 'application/json',
+      thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING_LEVEL || 'low' },
+    },
+  }));
+
+  if (!response.text) {
+    throw new Error('Model Gemini nie zwrócił żadnej odpowiedzi.');
+  }
+  try {
+    return normalizeExpenses(JSON.parse(response.text), categories);
+  } catch (err) {
+    throw new Error(`Nie udało się sparsować odpowiedzi Gemini jako JSON: ${err.message}`);
+  }
 }
 
 export function buildPrompt({ images, text, note, categories = CATEGORY_DEFINITIONS }) {

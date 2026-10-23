@@ -1,11 +1,11 @@
-import { extractReceipt as extractWithAnthropic } from './anthropicProvider.js';
-import { extractReceipt as extractWithGemini } from './geminiProvider.js';
-import { extractReceipt as extractWithOllama } from './ollamaProvider.js';
+import { extractReceipt as extractWithAnthropic, extractExpenses as extractExpensesWithAnthropic } from './anthropicProvider.js';
+import { extractReceipt as extractWithGemini, extractExpenses as extractExpensesWithGemini } from './geminiProvider.js';
+import { extractReceipt as extractWithOllama, extractExpenses as extractExpensesWithOllama } from './ollamaProvider.js';
 
 const PROVIDERS = {
-  anthropic: { name: 'anthropic', extractReceipt: extractWithAnthropic },
-  gemini: { name: 'gemini', extractReceipt: extractWithGemini },
-  ollama: { name: 'ollama', extractReceipt: extractWithOllama },
+  anthropic: { name: 'anthropic', extractReceipt: extractWithAnthropic, extractExpenses: extractExpensesWithAnthropic },
+  gemini: { name: 'gemini', extractReceipt: extractWithGemini, extractExpenses: extractExpensesWithGemini },
+  ollama: { name: 'ollama', extractReceipt: extractWithOllama, extractExpenses: extractExpensesWithOllama },
 };
 
 /**

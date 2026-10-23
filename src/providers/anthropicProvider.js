@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt } from '../categories.js';
 import { measure } from '../timing.js';
+import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
 
 /** Narzędzie z listą kategorii (enum) — lista może przyjść z budżetu, więc budowane per odczyt. */
 const extractTool = (categories) => ({
@@ -94,6 +95,48 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
   }
 
   return toolUse.input;
+}
+
+/** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — wymuszone narzędzie z id kategorii. */
+export async function extractExpenses({ text, categories, timer }) {
+  const model = process.env.ANTHROPIC_MODEL || 'claude-opus-5';
+  const tool = {
+    name: 'add_expenses',
+    description: 'Zwraca wydatki wymienione przez użytkownika: kategoria (id), kwota w zł i krótki opis.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              categoryId: { type: ['integer', 'null'], enum: [...categories.map((c) => c.id), null] },
+              amount: { type: 'number' },
+              description: { type: 'string' },
+            },
+            required: ['categoryId', 'amount', 'description'],
+          },
+        },
+      },
+      required: ['items'],
+    },
+  };
+
+  const response = await measure(timer, `anthropic ${model}`, () => new Anthropic().messages.create({
+    model,
+    max_tokens: 2048,
+    tools: [tool],
+    tool_choice: { type: 'tool', name: tool.name },
+    messages: [{ role: 'user', content: buildExpensesPrompt({ text, categories }) }],
+  }));
+
+  const toolUse = response.content.find((block) => block.type === 'tool_use');
+  if (!toolUse) {
+    throw new Error('Model nie zwrócił wydatków w oczekiwanym formacie.');
+  }
+
+  return normalizeExpenses(toolUse.input, categories);
 }
 
 /**
