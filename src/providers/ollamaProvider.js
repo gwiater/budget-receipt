@@ -1,5 +1,6 @@
 import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt, normalizeCategory } from '../categories.js';
 import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
+import { RECEIPT_RULES } from '../receiptRules.js';
 
 /**
  * Lokalny model przez Ollamę (https://ollama.com) — bez klucza API i bez opłat, np.
@@ -53,7 +54,7 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nOdczytaj z niego wszystkie pozycje.`
       : 'Odczytaj wszystkie pozycje z załączonego zdjęcia paragonu (polski paragon fiskalny).',
     multiImageHint,
-    '\nDla każdej pozycji podaj nazwę (bez ilości i ceny), wartość pozycji (totalPrice, liczba w zł, po rabatach) i kategorię.',
+    `\n${RECEIPT_RULES}\n`,
     `\n${categoryPrompt(categories)}\n`,
     '\nNazwa sklepu (store) to nazwa sieci/sklepu widoczna na paragonie (np. Biedronka, Lidl), nie nazwa firmy-właściciela.',
     'Podaj też nazwę sklepu (store), datę paragonu w formacie YYYY-MM-DD (date) i sumę do zapłaty (total), jeśli są widoczne.',

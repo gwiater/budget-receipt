@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt } from '../categories.js';
 import { measure } from '../timing.js';
 import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
+import { RECEIPT_RULES } from '../receiptRules.js';
 
 /** Narzędzie z listą kategorii (enum) — lista może przyjść z budżetu, więc budowane per odczyt. */
 const extractTool = (categories) => ({
@@ -27,8 +28,8 @@ const extractTool = (categories) => ({
           properties: {
             name: { type: 'string', description: 'Nazwa produktu/pozycji.' },
             quantity: { type: 'number', description: 'Ilość, jeśli podana.' },
-            unitPrice: { type: 'number', description: 'Cena jednostkowa, jeśli podana.' },
-            totalPrice: { type: 'number', description: 'Wartość pozycji (ilość * cena).' },
+            unitPrice: { type: 'number', description: 'Cena jednostkowa przed rabatem, jeśli podana.' },
+            totalPrice: { type: 'number', description: 'Kwota zapłacona za pozycję: wartość (ilość * cena) minus suma WSZYSTKICH rabatów wydrukowanych pod nią.' },
             category: {
               type: 'string',
               enum: categoryNames(categories),
@@ -40,7 +41,7 @@ const extractTool = (categories) => ({
       },
       total: {
         type: 'number',
-        description: 'Suma całego paragonu wydrukowana na dole, jeśli widoczna.',
+        description: 'Suma do zapłaty wydrukowana na dole paragonu, jeśli widoczna.',
       },
     },
     required: ['items'],
@@ -77,6 +78,7 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
     text: (text
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`
       : `Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`)
+      + `\n\n${RECEIPT_RULES}`
       + `\n\n${categoryPrompt(categories)}`
       + noteHint(note),
   });

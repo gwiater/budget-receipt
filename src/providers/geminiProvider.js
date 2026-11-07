@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { CATEGORY_DEFINITIONS, categoryPrompt, normalizeCategory } from '../categories.js';
 import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
+import { RECEIPT_RULES } from '../receiptRules.js';
 
 /**
  * Format odpowiedzi opisany w prompcie. Bez wymuszonego schematu (responseSchema) —
@@ -129,16 +130,7 @@ export function buildPrompt({ images, text, note, categories = CATEGORY_DEFINITI
     (text
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nOdczytaj z niego wszystkie pozycje.`
       : 'Odczytaj wszystkie pozycje z załączonego paragonu (polski paragon fiskalny).') + multiImageHint,
-    [
-      'Zasady:',
-      '- name: nazwa pozycji tak, jak jest na paragonie (bez ilości i ceny).',
-      '- totalPrice: wartość pozycji w zł po rabatach — dla towaru na wagę wartość, a nie cena za kg; rabat wydrukowany pod pozycją odejmij od niej.',
-      '- quantity i unitPrice: ilość i cena jednostkowa, jeśli są podane.',
-      '- store: nazwa sklepu lub sieci (np. Lidl, Biedronka), nie nazwa firmy-właściciela.',
-      '- date: data paragonu w formacie YYYY-MM-DD.',
-      '- total: suma do zapłaty z dołu paragonu.',
-      '- Pomiń pozycje stornowane (anulowane). Nie wymyślaj pozycji, których nie ma na paragonie.',
-    ].join('\n'),
+    RECEIPT_RULES,
     categoryPrompt(categories),
     noteHint(note),
     `Odpowiedz wyłącznie JSON-em w formacie:\n${RESPONSE_FORMAT}`,
