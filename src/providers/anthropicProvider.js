@@ -29,14 +29,20 @@ const extractTool = (categories) => ({
             name: { type: 'string', description: 'Nazwa produktu/pozycji.' },
             quantity: { type: 'number', description: 'Ilość, jeśli podana.' },
             unitPrice: { type: 'number', description: 'Cena jednostkowa przed rabatem, jeśli podana.' },
-            totalPrice: { type: 'number', description: 'Kwota zapłacona za pozycję: wartość (ilość * cena) minus suma WSZYSTKICH rabatów wydrukowanych pod nią.' },
+            price: { type: 'number', description: 'Wartość pozycji przed rabatami (ilość * cena), przepisana z paragonu.' },
+            discounts: {
+              type: 'array',
+              items: { type: 'number' },
+              description: 'Wszystkie rabaty wydrukowane pod pozycją (może być kilka, np. kupon i voucher), jako liczby dodatnie; brak → [].',
+            },
+            totalPrice: { type: 'number', description: 'price minus suma discounts.' },
             category: {
               type: 'string',
               enum: categoryNames(categories),
               description: 'Kategoria wydatku najlepiej odpowiadająca tej pozycji.',
             },
           },
-          required: ['name', 'totalPrice', 'category'],
+          required: ['name', 'price', 'discounts', 'totalPrice', 'category'],
         },
       },
       total: {

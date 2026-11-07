@@ -10,7 +10,7 @@ import { RECEIPT_RULES } from '../receiptRules.js';
  */
 const RESPONSE_FORMAT =
   '{"store": "nazwa sklepu" lub null, "date": "YYYY-MM-DD" lub null, "items": [{"name": "nazwa pozycji", '
-  + '"quantity": liczba lub null, "unitPrice": liczba lub null, "totalPrice": liczba, "category": "nazwa kategorii z listy"}], '
+  + '"quantity": liczba lub null, "unitPrice": liczba lub null, "price": liczba, "discounts": [liczba, ...], "totalPrice": liczba, "category": "nazwa kategorii z listy"}], '
   + '"total": liczba lub null}';
 
 /**
