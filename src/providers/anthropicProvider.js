@@ -54,6 +54,9 @@ const extractTool = (categories) => ({
   },
 });
 
+/** Ile razy najwyżej prosimy model o poprawkę, gdy suma pozycji nie zgadza się z sumą paragonu. */
+const MAX_CORRECTIONS = 2;
+
 /**
  * Wywołuje Claude (Anthropic) w celu rozpoznania pozycji paragonu i przypisania
  * im kategorii wydatku. Przyjmuje jeden lub więcej obrazów/PDF-ów paragonu
@@ -106,27 +109,32 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
   }
 
   // Suma pozycji ≠ suma paragonu (np. rabat przypisany do sąsiedniej pozycji, zdublowana
-  // pozycja) → jedna poprawka: model dostaje swój odczyt i różnicę. Zostaje lepszy z dwóch.
-  const diff = totalMismatch(toolUse.input);
-  if (diff === null || Math.abs(diff) < 0.015) {
-    return toolUse.input;
-  }
-  console.warn(`Anthropic: suma pozycji różni się od sumy paragonu o ${diff} zł — proszę o poprawkę`);
-  messages.push(
-    { role: 'assistant', content: response.content },
-    { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, is_error: true, content: mismatchFeedback(toolUse.input, diff) }] },
-  );
-  try {
-    const retry = await ask(' (poprawka)');
-    const fixed = retry.content.find((block) => block.type === 'tool_use')?.input;
-    const fixedDiff = fixed ? totalMismatch(fixed) : null;
-    if (fixedDiff !== null && Math.abs(fixedDiff) < Math.abs(diff)) {
-      return fixed;
+  // pozycja) → do MAX_CORRECTIONS poprawek: model dostaje swój odczyt i różnicę.
+  // Zostaje odczyt najbliższy sumie z paragonu.
+  let best = toolUse.input;
+  let bestDiff = totalMismatch(best);
+  let last = { response, toolUse, diff: bestDiff };
+  for (let round = 1; round <= MAX_CORRECTIONS && last.diff !== null && Math.abs(last.diff) >= 0.015; round++) {
+    console.warn(`Anthropic: suma pozycji różni się od sumy paragonu o ${last.diff} zł — poprawka ${round}`);
+    messages.push(
+      { role: 'assistant', content: last.response.content },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: last.toolUse.id, is_error: true, content: mismatchFeedback(last.toolUse.input, last.diff) }] },
+    );
+    try {
+      const retry = await ask(` (poprawka ${round})`);
+      const retryTool = retry.content.find((block) => block.type === 'tool_use');
+      if (!retryTool) break;
+      last = { response: retry, toolUse: retryTool, diff: totalMismatch(retryTool.input) };
+      if (last.diff !== null && Math.abs(last.diff) < Math.abs(bestDiff)) {
+        best = retryTool.input;
+        bestDiff = last.diff;
+      }
+    } catch (err) {
+      console.warn(`Anthropic: poprawka nie powiodła się (${err.message}), zostaje najlepszy dotychczasowy odczyt`);
+      break;
     }
-  } catch (err) {
-    console.warn(`Anthropic: poprawka nie powiodła się (${err.message}), zostaje pierwszy odczyt`);
   }
-  return toolUse.input;
+  return best;
 }
 
 /** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — wymuszone narzędzie z id kategorii. */
