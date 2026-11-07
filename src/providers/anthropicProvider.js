@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt } from '../categories.js';
 import { measure } from '../timing.js';
 import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
-import { RECEIPT_RULES } from '../receiptRules.js';
+import { RECEIPT_RULES, mismatchFeedback, totalMismatch } from '../receiptRules.js';
 
 /** Narzędzie z listą kategorii (enum) — lista może przyjść z budżetu, więc budowane per odczyt. */
 const extractTool = (categories) => ({
@@ -89,19 +89,43 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
       + noteHint(note),
   });
 
-  const response = await measure(timer, `anthropic ${process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5'}`, () => client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+  const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
+  const messages = [{ role: 'user', content }];
+  const ask = (label) => measure(timer, `anthropic ${model}${label}`, () => client.messages.create({
+    model,
     max_tokens: 4096,
     tools: [extractTool(categories)],
     tool_choice: { type: 'tool', name: 'extract_receipt' },
-    messages: [{ role: 'user', content }],
+    messages,
   }));
 
+  const response = await ask('');
   const toolUse = response.content.find((block) => block.type === 'tool_use');
   if (!toolUse) {
     throw new Error('Model nie zwrócił danych paragonu w oczekiwanym formacie.');
   }
 
+  // Suma pozycji ≠ suma paragonu (np. rabat przypisany do sąsiedniej pozycji, zdublowana
+  // pozycja) → jedna poprawka: model dostaje swój odczyt i różnicę. Zostaje lepszy z dwóch.
+  const diff = totalMismatch(toolUse.input);
+  if (diff === null || Math.abs(diff) < 0.015) {
+    return toolUse.input;
+  }
+  console.warn(`Anthropic: suma pozycji różni się od sumy paragonu o ${diff} zł — proszę o poprawkę`);
+  messages.push(
+    { role: 'assistant', content: response.content },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, is_error: true, content: mismatchFeedback(toolUse.input, diff) }] },
+  );
+  try {
+    const retry = await ask(' (poprawka)');
+    const fixed = retry.content.find((block) => block.type === 'tool_use')?.input;
+    const fixedDiff = fixed ? totalMismatch(fixed) : null;
+    if (fixedDiff !== null && Math.abs(fixedDiff) < Math.abs(diff)) {
+      return fixed;
+    }
+  } catch (err) {
+    console.warn(`Anthropic: poprawka nie powiodła się (${err.message}), zostaje pierwszy odczyt`);
+  }
   return toolUse.input;
 }
 

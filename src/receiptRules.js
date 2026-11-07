@@ -45,3 +45,23 @@ export function applyDiscounts(result) {
     }),
   };
 }
+
+/**
+ * Różnica między sumą pozycji (po rabatach) a sumą do zapłaty z paragonu, w zł.
+ * null, gdy paragon nie ma sumy — wtedy nie ma czego sprawdzać.
+ */
+export function totalMismatch(result) {
+  const total = Number(result?.total);
+  if (result?.total == null || !Number.isFinite(total) || !Array.isArray(result?.items)) return null;
+  const sum = applyDiscounts(result).items.reduce((a, item) => a + (Number(item?.totalPrice) || 0), 0);
+  return round2(sum - total);
+}
+
+/** Polecenie poprawki, gdy suma pozycji nie zgadza się z sumą paragonu. */
+export function mismatchFeedback(result, diff) {
+  const sum = round2(Number(result.total) + diff);
+  return `Suma pozycji po rabatach to ${sum.toFixed(2)} zł, a suma do zapłaty na paragonie to ${Number(result.total).toFixed(2)} zł `
+    + `(różnica ${diff > 0 ? '+' : ''}${diff.toFixed(2)} zł). Przejrzyj paragon jeszcze raz, wiersz po wierszu: czy każdy rabat jest przy pozycji bezpośrednio NAD nim, `
+    + 'czy nie pominięto drugiego rabatu pod pozycją, czy żadna pozycja nie jest zdublowana ani pominięta, czy ceny są przypisane do właściwych nazw. '
+    + 'Zwróć poprawiony, kompletny odczyt całego paragonu.';
+}
