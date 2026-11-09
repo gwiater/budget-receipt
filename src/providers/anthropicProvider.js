@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORY_DEFINITIONS, categoryNames, categoryPrompt } from '../categories.js';
 import { measure } from '../timing.js';
 import { buildExpensesPrompt, normalizeExpenses } from '../expenses.js';
+import { RECEIPT_RULES, mismatchFeedback, totalMismatch } from '../receiptRules.js';
 
 /** Narzędzie z listą kategorii (enum) — lista może przyjść z budżetu, więc budowane per odczyt. */
 const extractTool = (categories) => ({
@@ -27,25 +28,34 @@ const extractTool = (categories) => ({
           properties: {
             name: { type: 'string', description: 'Nazwa produktu/pozycji.' },
             quantity: { type: 'number', description: 'Ilość, jeśli podana.' },
-            unitPrice: { type: 'number', description: 'Cena jednostkowa, jeśli podana.' },
-            totalPrice: { type: 'number', description: 'Wartość pozycji (ilość * cena).' },
+            unitPrice: { type: 'number', description: 'Cena jednostkowa przed rabatem, jeśli podana.' },
+            price: { type: 'number', description: 'Wartość pozycji przed rabatami (ilość * cena), przepisana z paragonu.' },
+            discounts: {
+              type: 'array',
+              items: { type: 'number' },
+              description: 'Wszystkie rabaty wydrukowane pod pozycją (może być kilka, np. kupon i voucher), jako liczby dodatnie; brak → [].',
+            },
+            totalPrice: { type: 'number', description: 'price minus suma discounts.' },
             category: {
               type: 'string',
               enum: categoryNames(categories),
               description: 'Kategoria wydatku najlepiej odpowiadająca tej pozycji.',
             },
           },
-          required: ['name', 'totalPrice', 'category'],
+          required: ['name', 'price', 'discounts', 'totalPrice', 'category'],
         },
       },
       total: {
         type: 'number',
-        description: 'Suma całego paragonu wydrukowana na dole, jeśli widoczna.',
+        description: 'Suma do zapłaty wydrukowana na dole paragonu, jeśli widoczna.',
       },
     },
     required: ['items'],
   },
 });
+
+/** Ile razy najwyżej prosimy model o poprawkę, gdy suma pozycji nie zgadza się z sumą paragonu. */
+const MAX_CORRECTIONS = 2;
 
 /**
  * Wywołuje Claude (Anthropic) w celu rozpoznania pozycji paragonu i przypisania
@@ -77,24 +87,54 @@ export async function extractReceipt({ images, text, note, categories = CATEGORY
     text: (text
       ? `Poniżej treść paragonu (tekst):\n\n${text}\n\nRozpoznaj wszystkie pozycje i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`
       : `Rozpoznaj wszystkie pozycje widoczne na tym paragonie i przypisz każdej z nich kategorię wydatku z dostępnej listy.${multiImageHint}`)
+      + `\n\n${RECEIPT_RULES}`
       + `\n\n${categoryPrompt(categories)}`
       + noteHint(note),
   });
 
-  const response = await measure(timer, `anthropic ${process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5'}`, () => client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+  const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
+  const messages = [{ role: 'user', content }];
+  const ask = (label) => measure(timer, `anthropic ${model}${label}`, () => client.messages.create({
+    model,
     max_tokens: 4096,
     tools: [extractTool(categories)],
     tool_choice: { type: 'tool', name: 'extract_receipt' },
-    messages: [{ role: 'user', content }],
+    messages,
   }));
 
+  const response = await ask('');
   const toolUse = response.content.find((block) => block.type === 'tool_use');
   if (!toolUse) {
     throw new Error('Model nie zwrócił danych paragonu w oczekiwanym formacie.');
   }
 
-  return toolUse.input;
+  // Suma pozycji ≠ suma paragonu (np. rabat przypisany do sąsiedniej pozycji, zdublowana
+  // pozycja) → do MAX_CORRECTIONS poprawek: model dostaje swój odczyt i różnicę.
+  // Zostaje odczyt najbliższy sumie z paragonu.
+  let best = toolUse.input;
+  let bestDiff = totalMismatch(best);
+  let last = { response, toolUse, diff: bestDiff };
+  for (let round = 1; round <= MAX_CORRECTIONS && last.diff !== null && Math.abs(last.diff) >= 0.015; round++) {
+    console.warn(`Anthropic: suma pozycji różni się od sumy paragonu o ${last.diff} zł — poprawka ${round}`);
+    messages.push(
+      { role: 'assistant', content: last.response.content },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: last.toolUse.id, is_error: true, content: mismatchFeedback(last.toolUse.input, last.diff) }] },
+    );
+    try {
+      const retry = await ask(` (poprawka ${round})`);
+      const retryTool = retry.content.find((block) => block.type === 'tool_use');
+      if (!retryTool) break;
+      last = { response: retry, toolUse: retryTool, diff: totalMismatch(retryTool.input) };
+      if (last.diff !== null && Math.abs(last.diff) < Math.abs(bestDiff)) {
+        best = retryTool.input;
+        bestDiff = last.diff;
+      }
+    } catch (err) {
+      console.warn(`Anthropic: poprawka nie powiodła się (${err.message}), zostaje najlepszy dotychczasowy odczyt`);
+      break;
+    }
+  }
+  return best;
 }
 
 /** Wydatki z tekstu (POST /api/expenses/text, patrz src/expenses.js) — wymuszone narzędzie z id kategorii. */
